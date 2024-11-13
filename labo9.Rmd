@@ -6,7 +6,7 @@ output: "html_document"
 
 ## 1.a
 
-Le modèle global de paysage, de mère caribou et du jeune est un modèle global, puisqu'on peut reconstruire tous les autres modèles à partir des variables qui le composent. Voici une représentation de comment les modèles s'imbriquent les uns dans les autres, avec les variables explicatives des modèles les plus imbriqués entre parenthèses :
+Le modèle de paysage, de mère caribou et du jeune est un modèle global, puisqu'on peut reconstruire tous les autres modèles à partir des variables qui le composent. Voici une représentation de comment les modèles proposés sont  intégrés ensemble, avec les variables explicatives des modèles nichés entre parenthèses :
 
 - Modèle de paysage, de mère caribou et du jeune
   - Modèle de paysage
@@ -18,7 +18,7 @@ Le modèle global de paysage, de mère caribou et du jeune est un modèle global
     - Modèle de condition du jeune (Masse initiale du jeune)
 
 ## 1.b
-Nous importons d'abord les données et nous en observons la structure et les relations entre les variables à l'aide d'un graphique.
+Nous importons d'abord les données et nous en observons la structure, ainsi que les relations entre les variables à l'aide d'un graphique et d'une matrice de corrélation.
 
 ```{r}
 setwd("~/Documents/donnees_eco/Labo9")
@@ -35,15 +35,17 @@ plot(caribou)
 cor(caribou[c("InitialMass", "ConifCover", "DecidCover", "WaterCover", "Altitude")])
 ```
 
-Nous observervons que les variables de couvert de feuillu et de couvert de conifères sont fortement corrélées, avec une corrélation de Pearson de -0.789. Ce coefficient est cohérent avec le fait que si un peuplement est dominé par les résineux, les feuillus sont par définition moins présents et vice-versa.
+Nous observons que les variables de couvert de feuillu et de couvert de conifères sont fortement corrélées, avec une corrélation de Pearson de -0.789. Ce coefficient est cohérent avec le fait que si un peuplement est dominé par les résineux, les feuillus sont par définition moins présents et vice-versa.
 
-Cette forte colinéarité pose problème pour les modèles qui utilisent ces deux variables, à savoir le modèle de quantité et type d'habitat, le modèle de paysage et le modèle de paysage, de mère caribou et du jeune. Nous enlevons la variable explicative Feuillus de ces modèles pour les analyses.
+Cette forte colinéarité pose problème pour les modèles qui utilisent ces deux variables, à savoir le modèle de quantité et type d'habitat, le modèle de paysage et le modèle de paysage, de mère caribou et du jeune. Nous enlevons la variable explicative Feuillus de ces modèles pour les analyses, en émettant l'hypothèse que le caribou, qui mange du lichen, préfère les peuplements dominés par les conifères et que son gain de masse pourrait être mieux expliqué par le recouvrement de conifères que de feuillus.
 
-Nous avons aussi transformé en facteur les variables MotherYoung, qui était un charactère, et RoadPresence, qui était un entier, afin de les utliser correctement dans les analyses.
+Nous avons aussi transformé en facteur les variables MotherYoung, qui était de type charactère, et RoadPresence, qui était de type entier, afin de les utliser correctement dans les analyses.
 
 ## 1.c
 
-Nous comparons les différents modèles à l'aide de l'AIC. Nous utilisons les mêmes formulations des 8 modèles que proposés dans l'énoncé, à la différence que nous avons éliminé la variable Feuillus des modèles décrits au point précédent.
+Nous comparons les 8 modèles proposés à l'aide de l'AIC. Nous utilisons les mêmes formulations que proposés dans l'énoncé, à l'exception des modèles nommés au point 1.b où nous avons éliminé la variable Feuillus.
+
+Les modèles sont définis dans la liste suivante :
 
 ```{r}
 model_list = list(
@@ -56,8 +58,14 @@ model_list = list(
   lm(MassGain ~ MotherYoung, data=caribou),
   lm(MassGain ~ InitialMass, data=caribou)
 )
+```
 
-names = c("Paysage, de mère caribou et du jeune",
+Nous procédons ensuite aux calculs d'AICc.
+
+```{r}
+library(nortest)
+
+names = c("Paysage, mère caribou et jeune",
   "Paysage",
   "Quantité et type d'habitat",
   "Perturbations et altitude",
@@ -67,129 +75,153 @@ names = c("Paysage, de mère caribou et du jeune",
   "Condition du jeune"
 )
 
+# Vérification de la normalité des résidus
+ad_res <- lapply(model_list, function(x) ad.test(residuals(x)))
+names(ad_res) <- names
+ad_res
+
 # Calcul d'AICc
 AICc <- function(x) {
   -2*logLik(x)[1]+2*(length(coefficients(x))+1)*(60/(60-(length(coefficients(x))+1)-1))
 }
-
 aic <- data.frame(
   Model_name = names,
   AIC = unlist(lapply(model_list, AICc))
 )
+aic$delta <- aic$AIC - min(aic$AIC)
 
+# AIC des modèles par ordre croissant
 aic[order(aic$AIC), ]
 
-coefs <- lapply(model_list, summary) |>
-  sapply(function(x) x$coef)
-
+coefs <- lapply(model_list, summary)
 names(coefs) <- names
-
 coefs[c(1,4,2)]
 ```
+Avant de faire les calculs d'AIC, nous procédons à une vérification de la normalité des résidus des modèles avec le test d'Anderson-Darling. Nous trouvons que les 8 modèles respectent la condition d'application de normalité des résidus.
 
-Le modèle général, soit le modèle de paysage, de la mère caribou et du jeune, est le meilleur, avec une AIC de 319.00, mais les deux modèles suivants sont très proches, avec une AIC de 322.26 pour le modèle de perturbation et alitude, et 327.75 pour le modèle de paysage. Les AIC des autres modèles sont proches les unes des autres, soit autour de 374.
+Le modèle général, soit le modèle de paysage, de la mère caribou et du jeune, est le meilleur, avec une AIC de 322.24, et les deux modèles suivants sont très proches, avec une AIC de 322.99 (delta de 0.75) pour le modèle de perturbation et alitude, et 327.39 (delta de 5.15) pour le modèle de paysage. Les AIC des autres modèles sont proches les unes des autres, autour de 374 (delta de plus de 51).
 
-Dans les summary des 3 modèles, on voit que la présence de route à la p-value la plus faible. Nous interprétertons de ces résultats que la présence de route jouent un rôle important dans l'habitat du caribou. 
+En observant les coefficients des 3 modèles les plus performants, on voit que la présence de route a le coefficient le plus significatif. Dans les 3 cas la p-value de ce coefficient est beaucoup plus petite que 0.05, ce qui indique que le coefficient est significativement différent de 0. Cette variable pourrait expliquer que ces modèles ont des scores comparables, étant donné qu'il s'agit des 3 modèles qui l'utilisent. 
 
 ## 1.d
 
 Afin de déterminer l'effet de la proportion de résineux et de la présence de route sur le gain de masse chez les jeunes caribous à l'aide d'une inférence multimodèle, nous procédons d'abord à une sélection de modèles qui utilisent les variables ConfiCover et RoadPresence. Nous arrivons à 3 modèles pour chaque variable.
 
+Nous procédons ensuite à calculer la moyenne pondérée par les poids d'AICc pour les coefficients des 2 variables, et nous calculons l'intervalle de confiance à 95% à l'aide de l'équation révisée pour l'erreur standard inconditionnelle.
+
 ```{r}
 
 # Fonction pour calculer les poids d'AIC
-compute_AICWt <- function(aic_list) {
-  modelLik = exp(-0.5 * aic_list - min(aic_list))
-  modelLik/sum(modelLik)
+compute_AICWt <- function(target_models) {
+  aic_list <- aic["AIC"][target_models, ]
+  model_lik <- exp(-0.5 * aic_list - min(aic_list))
+  model_lik / sum(model_lik)
+}
+
+# Fonction pour obtenir les estimés et SE des coefficients
+get_coefs <- function(target_models, var, index) {
+  c(unlist(lapply(model_list[target_models], function(x) 
+    summary(x)$coef[var, index])))
+}
+
+# Intervalle de confiance à 95% avec SE inconditionnelle avec equation révisée
+compute_uncond_95CI <- function(AICWt, se, ests, avg_est) {
+  uncond_se_new <- sqrt(sum(AICWt*(se^2 + (ests - avg_est)^2)))
+  avg_est + 1.96 * c(-1*uncond_se_new, uncond_se_new)
 }
 
 # Poids pour la variable RoadPresence
-road_AICWt <- compute_AICWt(aic["AIC"][c(1,2,4),])
+road_AICWt <- compute_AICWt(c(1,2,4))
 
 # Estimés, moyenne et SE pour les modèles contenant la variable RoadPresence
-road_ests <- c(coef(model_list[[1]])["RoadPresence1"],
-  coef(model_list[[2]])["RoadPresence1"],
-  coef(model_list[[4]])["RoadPresence1"])
-mod_road_avg_est <- sum(road_AICWt * road_ests)
-road_se <- c(summary(model_list[[1]])$coef["RoadPresence1", 2],
-  summary(model_list[[2]])$coef["RoadPresence1", 2],
-  summary(model_list[[4]])$coef["RoadPresence1", 2])
-
-# SE inconditionnelle avec l'equation révisée
-uncond_se_new_road <- sqrt(sum(road_AICWt*(road_se^2 + (road_ests - mod_road_avg_est)^2)))
+road_ests <- get_coefs(c(1,2,4), "RoadPresence1", 1)
+road_se <- get_coefs(c(1,2,4), "RoadPresence1", 2)
+road_avg_est <- sum(road_AICWt * road_ests)
+road_avg_est
 
 # Intervalle de confiance à 95% pour le coefficient de RoadPresence
-uncond_95CI_road <- mod_road_avg_est + 1.96 * c(-1*uncond_se_new_road, uncond_se_new_road)
+uncond_95CI_road <- compute_uncond_95CI(road_AICWt, road_se, road_ests, road_avg_est)
+uncond_95CI_road
 
 # Poids pour la variable ConifCover
-conif_AICWt <- compute_AICWt(aic["AIC"][c(1,2,3),])
+conif_AICWt <- compute_AICWt(c(1,2,3))
 
-# Estimés, moyenne et SE pour les modèles contenant la variable ConifCover
-conif_ests <- c(coef(model_list[[1]])["ConifCover"],
-  coef(model_list[[2]])["ConifCover"],
-  coef(model_list[[3]])["ConifCover"])
-mod_conif_avg_est <- sum(conif_AICWt * conif_ests)
-conif_se <- c(summary(model_list[[1]])$coef["ConifCover", 2],
-  summary(model_list[[2]])$coef["ConifCover", 2],
-  summary(model_list[[3]])$coef["ConifCover", 2])
+# Estimés, moyenne et SE pour les modèles contenant la variable RoadPresence
+conif_ests <- get_coefs(c(1,2,3), "ConifCover", 1)
+conif_se <- get_coefs(c(1,2,3), "ConifCover", 2)
+conif_avg_est <- sum(conif_AICWt * conif_ests)
+conif_avg_est
 
-# SE inconditionnelle avec l'equation révisée
-uncond_se_new_conif <- sqrt(sum(conif_AICWt*(conif_se^2 + (conif_ests - mod_conif_avg_est)^2)))
-
-# Intervalle de confiance à 95% pour le coefficient de ConifCover
-uncond_95CI_conif <- mod_conif_avg_est + 1.96 * c(-1*uncond_se_new_conif, uncond_se_new_conif)
+# Intervalle de confiance à 95% pour le coefficient de RoadPresence
+uncond_95CI_conif <- compute_uncond_95CI(conif_AICWt, conif_se, conif_ests, conif_avg_est)
+uncond_95CI_conif
 ```
 
-On observe que blabla
+Nous obtenons pour la variable route un coefficient moyen de -7.92, et un intervalle de confiance de -9.62 à -6.23. Nous pouvons interpréter biologiquement que si une route est présente, le gain de masse des jeunes caribous devrait entre -9.62 à -6.23 dans 95% des cas. Nous pouvons émettre l'hypothèse que la présence de route fragmente l'habitat des caribous et pourrait réduire l'accès à des zones d'alimentation alternatives, ce qui devrait être testé dans des recherches subséquentes.
+
+Dans le cas du couvert de conifères, nous obtenons un coefficient moyen de 0.55 et un intervalle de confiance de -2.75 et 3.84. Étant donné que 0 se trouve à l'intérieur de confiance, nous ne pouvons pas affirmer que le coefficient est significativement différent de 0. Ainsi, l'interprétation biologique de cette analyse est que le couvert de conifères n'influence pas significativement le gain de masse des jeunes caribous.
 
 ## 1.e
 
-Avec 
+Nous réalisons une inférence multimodèles à l'aide du package AICcmodavg et de la fonction modavg pour les variables RoadPresence et ConifCover.
 
 ```{r}
 library("AICcmodavg")
 
-aictab(model_list)
+aictab(model_list, modnames=names)
 
 # Inférence multimodèles pour la route
-mod_road <- modavg(model_list, parm = "RoadPresence1")
+mod_road <- modavg(model_list, parm = "RoadPresence1", modnames=names)
 mod_road
 
+# Inférence mutlimodèles pour le couvert de conifères
+mod_conif <- modavg(model_list, parm = "ConifCover", modnames=names)
+mod_conif
+```
+
+Nous observons ici les mêmes valeurs d'AIC et les mêmes deltas que calculées au point 1.d, et les moyennes et intervalles de confiance sont aussi les mêmes. 
+
+Nous illustrons les intervalles de confiance des coefficients dans le graphique suivant :
+
+```{r}
 # Graphiques pour la route
 rd_labels <- c(mod_road$Mod.avg.table$Modnames, "Moyenne pondérée")
-rd_pos <- as.numeric(factor(rd_labels)) 
-rd_lower_ci <- c(c(mod_road$Mod.avg.table$Beta_est - 1.96*mod_road$Mod.avg.table$SE), mod_road$Lower.CL)
-rd_upper_ci <- c(c(mod_road$Mod.avg.table$Beta_est + 1.96*mod_road$Mod.avg.table$SE), mod_road$Upper.CL)
+rd_lower_ci <- c(mod_road$Mod.avg.table$Beta_est - 1.96*mod_road$Mod.avg.table$SE)
+rd_upper_ci <- c(mod_road$Mod.avg.table$Beta_est + 1.96*mod_road$Mod.avg.table$SE)
 
-plot(rd_pos, c(mod_road$Mod.avg.table$Beta_est, mod_road$Mod.avg.beta),
+plot(c(1:4), c(mod_road$Mod.avg.table$Beta_est, mod_road$Mod.avg.beta),
   xaxt = "n", pch = 16,
      xlab = "Modèles", ylab = "Coefficients", main = "Inférence multimodèle pour la variable présence de route", ylim=c(max(rd_upper_ci), min(rd_lower_ci)))
-axis(1, at = rd_pos, labels = rd_labels)
-arrows(x0 = rd_pos, y0 = rd_lower_ci, 
-  x1 = rd_pos, y1 = rd_upper_ci, 
+axis(1, at = c(1:4), labels = rd_labels, cex.axis=0.8)
+arrows(x0 = c(1:3), y0 = rd_lower_ci, 
+  x1 = c(1:3), y1 = rd_upper_ci, 
   angle = 90, code = 3, length = 0.1, col = "blue")
-
-cf_pos <- as.numeric(factor(mod_road$Mod.avg.table$Modnames)) 
-
-# Estimation du gain de masse en fonction du coefficient inféré de la route
-# preds <- modavgPred(model_list, modnames = names, newdata = caribou)
-# str(preds)
-# plot(preds$mod.avg.pred)
-
-
-# Inférence mutlimodèles pour le couvert de conifères
-mod_conif <- modavg(model_list, parm = "ConifCover")
-mod_conif
+arrows(x0 = 4, y0 = mod_road$Lower.CL, x1 = 4, y1=mod_road$Upper.CL,
+  angle = 90, code = 3, length = 0.1, col = "purple")
 
 cf_labels <- c(mod_conif$Mod.avg.table$Modnames, "Moyenne pondérée")
-cf_pos <- as.numeric(factor(cf_labels)) 
-cf_lower_ci <- c(c(mod_conif$Mod.avg.table$Beta_est - 1.96*mod_conif$Mod.avg.table$SE), mod_conif$Lower.CL)
-cf_upper_ci <- c(c(mod_conif$Mod.avg.table$Beta_est + 1.96*mod_conif$Mod.avg.table$SE), mod_conif$Upper.CL)
+cf_lower_ci <- c(mod_conif$Mod.avg.table$Beta_est - 1.96*mod_conif$Mod.avg.table$SE) 
+cf_upper_ci <- c(mod_conif$Mod.avg.table$Beta_est + 1.96*mod_conif$Mod.avg.table$SE)
 
-plot(cf_pos, c(mod_conif$Mod.avg.table$Beta_est, mod_conif$Mod.avg.beta), xaxt = "n", pch = 16,
-     xlab = "Modèles", ylab = "Coefficients (Moyennes et intervalles de confiance)", main = "Inférence multimodèle pour la variable de couvert de conifères", ylim=c(max(cf_upper_ci), min(cf_lower_ci)))
-axis(1, at = cf_pos, labels = cf_labels)
-arrows(x0 = cf_pos, y0 = cf_lower_ci, 
-  x1 = cf_pos, y1 = cf_upper_ci, 
+plot(c(1:4), c(mod_conif$Mod.avg.table$Beta_est, mod_conif$Mod.avg.beta), xaxt = "n", pch = 16,
+     xlab = "Modèles", ylab = "Coefficients", main = "Inférence multimodèle pour la variable de couvert de conifères", ylim=c(max(cf_upper_ci), min(cf_lower_ci)))
+axis(1, at = c(1:4), labels = cf_labels, cex.axis= 0.8)
+arrows(x0 = c(1:3), y0 = cf_lower_ci, 
+  x1 = c(1:3), y1 = cf_upper_ci, 
   angle = 90, code = 3, length = 0.1, col = "blue")
+arrows(x0 = 4, y0 = mod_conif$Lower.CL, x1 = 4, y1=mod_conif$Upper.CL,
+  angle = 90, code = 3, length = 0.1, col = "purple")
+
+
 ```
+
+Nous représentons finalement l'impact des coefficients calculés par inférence multimodèle sur le gain de masse :
+
+```{r}
+# Estimation du gain de masse en fonction du coefficient inféré de la route
+preds <- modavgPred(model_list, modnames = names, newdata = caribou)
+# str(preds)
+# plot(preds$mod.avg.pred)
+```
+
+Nous pouvons aisément voir sur les graphiques que la présence ou absence de route affecte le gain de masse des jeunes caribous, alors que le couvert de conifère n'a pas vraiment d'effet significatif.
